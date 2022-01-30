@@ -15,6 +15,7 @@ class TaskController extends Controller
      */
     public function index(Request $request)
     {
+        //get query parameter for filtering by date
         $date = $request->query('date') ?? null;
 
         $tasks = Task::select('id', 'name', 'description', 'date', 'is_done');
@@ -24,7 +25,7 @@ class TaskController extends Controller
 
         $tasks = $tasks->get();
 
-        return response()->json(array('data' => $tasks));
+        return response()->json(array('data' => $tasks), 200);
     }
 
     /**
@@ -35,7 +36,6 @@ class TaskController extends Controller
      */
     public function store(Request $request)
     {
-        // dd($request->description);
         $validated = $request->validate([
             'name' => 'required|max:25|unique:tasks,name',
             'description' => 'max:255',
@@ -70,11 +70,13 @@ class TaskController extends Controller
             $task = Task::select('id', 'name', 'description', 'date')
                 ->where('id', $task_id)->first();
 
+            // check if the task exist
             if (!$task)
                 return response()->json(array('message' => 'Task not found.'), 404);
 
             return response()->json(array('data' => $task), 200);
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             return response()->json(array('message' => 'Internal server error.'), 500);
         }
     }
@@ -89,27 +91,37 @@ class TaskController extends Controller
     public function update(Request $request, $task_id)
     {
         $validated = $request->validate([
-            'name' => 'required|max:25|unique:tasks,name,' . $task_id,
+            'name' => 'unique:tasks,name,' . $task_id,
             'description' => 'max:255',
-            'date' => 'date_format:Y-m-d'
+            'date' => 'date_format:Y-m-d',
+            'is_done' => 'nullable|numeric|min:0|max:1'
         ]);
 
         try {
-            $task = Task::select('id', 'name', 'description', 'date')
+            $task = Task::select('id', 'name', 'description', 'date', 'is_done')
                         ->where('id', $task_id)->first();
 
+            // check if the task exist
             if(!$task)
                 return response()->json(array('message' => 'Task not found.'), 404);
 
-            $task->update([
-                'name' => $validated['name'],
-                'description' => $validated['description'],
-                'date' => $validated['date']
-            ]);
+            // check if it is status change.
+            // if not only update name description, and date
+            if(is_null($validated['is_done'])) {
+                $task->name = $validated['name'];
+                $task->description = $validated['description'];
+                $task->date = $validated['date'];
+            }
+            else {
+                $task->is_done = $validated['is_done'];
+            }
+
+            $task->update();
 
             return response()->json(array('message' => 'Task update successfully.'), 200);
-        } catch (Exception $e) {
-            return response()->json(array('message' => 'Internal server error.'), 500);
+        }
+        catch (Exception $e) {
+            return response()->json(array('message' => $e->getMessage()), 500);
         }
     }
 
